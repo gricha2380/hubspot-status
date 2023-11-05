@@ -1,0 +1,15 @@
+{
+  "name": "hubspot-status",
+  "version": "1.0.0",
+  "description": "Email alerts for Hubspot outages. Powered by AWS.",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "zip -r lib/lambdaFunc.zip . && aws lambda update-function-code --function-name hubspot_status_parse --zip-file fileb://lib/lambdaFunc.zip --profile personal --region us-east-1",
+    "checknow": "curl process.env.hubspot-status-function-url"
+  },
+  "author": "Gregor Richardson",
+  "license": "ISC",
+  "devDependencies": {
+    "aws-sdk": "^2.1488.0"
+  }
+}
