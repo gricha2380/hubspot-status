@@ -17,8 +17,8 @@ module.exports = {
     return response;
   },
   parseEmails: function (list) { return list.split(",") },
-  fetch: async function (url, callback) {
-    console.log("Inside fetch...", url);
+  fetchStatus: async function (url, mode) {
+    console.log("Inside fetch status...", url);
     
     https.get(url, (resp)=>{
       let data = "";
@@ -40,7 +40,7 @@ module.exports = {
         } else {
           // send email
           console.log("status is not normal. Sending email." );
-          this.sendEmail(json, callback);
+          this.sendEmail(json, mode);
         }
       });
       
@@ -48,31 +48,93 @@ module.exports = {
       console.error("Error: ", err);
     });
   },
-  sendEmail: async function (json, callback) {
+  fetchSummary: async function (url, mode) {
+    console.log("Inside fetch summary...", url);
+    
+    https.get(url, (resp)=>{
+      let data = "";
+      
+      // A chunk of data has been received.
+      resp.on("data", (chunk) => {
+        data += chunk;
+      });
+      
+      // The whole response has been received. Print out the result.
+      resp.on("end", () => {
+        console.log("data result",data);
+        let json = JSON.parse(data);
+        console.log("data parsed. Incident list:", json.incidents);
+
+        // Look for response status
+        if (json.incidents.length == 0) {
+          console.log("status is normal. No further action.")
+        } else {
+          // send email
+          console.log("status is not normal. Sending email." );
+          this.sendEmail(json,mode );
+        }
+      });
+      
+    }).on("error", (err) => {
+      console.error("Error: ", err);
+    });
+  },
+  sendEmail: async function (json, mode) {
     const From = process.env.From; // Must belong to a verified SES account
     const RecipientEmailAddress = this.parseEmails(process.env.RecipientEmailAddress) // ["me@gmail.com"];
     console.log("inside email", From, RecipientEmailAddress);
     let d = new Date();
     let date = "" + d.getFullYear() + d.getMonth() + d.getDay() + d.getHours() + d.getMinutes() + d.getMilliseconds();
     
-    var params = {
-      Source: From,
-      Destination: { ToAddresses: RecipientEmailAddress },
-      Message: {
-        Subject: {
-          Data: `Hubspot status alert - ${date}`
-        },
-        Body: {
-          Text: {
-            Data: `
-            There has been a change in Hubspot status. This is what their API reported:
-            Status: ${json.status.indicator}
-            Description: ${json.status.description}
-            `
+    let params;
+    
+    if (mode == "SUMMARY") {
+      params = {
+        Source: From,
+        Destination: { ToAddresses: RecipientEmailAddress },
+        Message: {
+          Subject: {
+            Data: `Hubspot status alert - ${date}`
+          },
+          Body: {
+            Text: {
+              Data: `
+              There has been a change in Hubspot status. This is what their API reported:
+  
+              URL: ${json.incidents[0].shortlink}
+              Created: ${json.incidents[0].created_at}
+              Updated: ${json.incidents[0].updated_at}
+              Status: ${json.incidents[0].status}
+              Description: ${json.incidents[0].name}
+              Details: ${json.incidents[0].incident_updates[0].body}
+              `
+            }
           }
         }
-      }
-    };
+      };
+    }
+
+    if (mode == "STATUS") {
+      params = {
+        Source: From,
+        Destination: { ToAddresses: RecipientEmailAddress },
+        Message: {
+          Subject: {
+            Data: `Hubspot status alert - ${date}`
+          },
+          Body: {
+            Text: {
+              Data: `
+              There has been a change in Hubspot status. This is what their API reported:
+  
+              Status: ${json.status.indicator}
+              Description: ${json.status.description}
+              `
+            }
+          }
+        }
+      };
+    }
     
     return ses.sendEmail(
       params,
